@@ -39,14 +39,9 @@ export function ShareActions({ round }: { round: RoundRecord }) {
     await copy(text, "message");
   }
 
-  async function openMessages() {
+  function openMessages() {
     const text = buildShareMessage(round, publicUrl());
-    try {
-      await copy(text, "message");
-      window.location.assign("sms:");
-    } catch {
-      await shareRound();
-    }
+    window.location.assign(`sms:&body=${encodeURIComponent(text)}`);
   }
 
   return (
@@ -59,7 +54,7 @@ export function ShareActions({ round }: { round: RoundRecord }) {
           <span className="messages-action-icon"><MessageCircle size={19} /></span>
           <span>
             <strong>Open in Messages</strong>
-            <small>{copied === "message" ? "Copied — paste it into your message" : "Copies your recap, then opens Messages"}</small>
+            <small>Your round recap will be ready to send</small>
           </span>
         </button>
       )}

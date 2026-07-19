@@ -73,6 +73,7 @@ test("provides both the iOS share sheet and direct Apple Messages handoff", asyn
 
   assert.match(shareActions, /navigator\.share/);
   assert.match(shareActions, /Open in Messages/);
-  assert.match(shareActions, /window\.location\.assign\("sms:"\)/);
-  assert.match(shareActions, /Copies your recap, then opens Messages/);
+  assert.match(shareActions, /sms:&body=/);
+  assert.match(shareActions, /encodeURIComponent\(text\)/);
+  assert.match(shareActions, /Your round recap will be ready to send/);
 });
