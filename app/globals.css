@@ -1761,6 +1761,54 @@ input:focus-visible {
   gap: 10px;
 }
 
+.messages-action {
+  width: 100%;
+  min-height: 58px;
+  margin-top: 10px;
+  padding: 9px 16px;
+  border: 1px solid rgba(18, 61, 45, 0.16);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--green);
+  background: #e8efcf;
+  cursor: pointer;
+  text-align: left;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.messages-action:hover {
+  border-color: var(--green-2);
+  background: #e1ecc0;
+  transform: translateY(-1px);
+}
+
+.messages-action-icon {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: var(--green);
+}
+
+.messages-action > span:last-child {
+  display: grid;
+  gap: 2px;
+}
+
+.messages-action strong {
+  font-size: 12px;
+}
+
+.messages-action small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
 .share-secondary-actions button {
   min-height: 44px;
   border: 1px solid var(--line);

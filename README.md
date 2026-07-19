@@ -17,6 +17,6 @@ OpenGolfAPI course reads are keyless. Supabase is only required when a golfer sa
 - `NEXT_PUBLIC_SUPABASE_URL`: Supabase project URL.
 - `SUPABASE_SERVICE_ROLE_KEY`: server-only key used by the round API routes. Never expose this value to the browser.
 
-## Deploying
+## Deploying to Vercel
 
-Set the same three environment values in the hosting provider. The project is built with Next.js, TypeScript, and Tailwind CSS.
+Import the repository as a Next.js project and leave the Root Directory set to the repository root (`./`), not `app/`. Set the same three environment values for Production and Preview, then deploy from `main`. Vercel should use the default `next build` command and `.next` output automatically.
