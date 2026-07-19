@@ -152,6 +152,19 @@ export function RoundCreator() {
     setStep("scores");
   }
 
+  function reviewCoursePars() {
+    if (!course) return;
+    setManualName(course.name);
+    setManualCity(course.city ?? "");
+    setManualState(course.state ?? "");
+    setManualHoleCount(course.holes.length === 9 ? 9 : 18);
+    setManualPars([
+      ...course.holes.map((hole) => hole.par),
+      ...Array(Math.max(0, 18 - course.holes.length)).fill(4),
+    ]);
+    setStep("manual");
+  }
+
   function continueManualCourse(event: FormEvent) {
     event.preventDefault();
     if (!manualName.trim()) return;
@@ -375,6 +388,19 @@ export function RoundCreator() {
                 <ChevronRight size={20} />
               </button>
             ))}
+          </div>
+          <div className="course-par-check">
+            <div>
+              <span>Hole pars</span>
+              <div>
+                {course.holes.map((hole) => (
+                  <i key={hole.hole} title={`Hole ${hole.hole}: par ${hole.par}`}>
+                    <small>{hole.hole}</small><strong>{hole.par}</strong>
+                  </i>
+                ))}
+              </div>
+            </div>
+            <button type="button" onClick={reviewCoursePars}>Pars look wrong? Review &amp; edit</button>
           </div>
           <p className="data-note">Course data from OpenGolfAPI, ODbL. You’ll be able to review every par before saving.</p>
         </section>

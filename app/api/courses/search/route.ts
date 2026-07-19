@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import type { CourseSearchResult } from "@/lib/types";
-
-const API_ROOT = "https://api.opengolfapi.org/v1";
+import {
+  normalizeOpenGolfHoles,
+  OPENGOLF_API_ORIGIN,
+  type RawOpenGolfCourse,
+} from "@/lib/opengolf";
 
 type SearchCourse = {
   id: string;
@@ -12,11 +15,6 @@ type SearchCourse = {
   par?: number | null;
 };
 
-type DetailCourse = SearchCourse & {
-  holes?: number | null;
-  scorecard?: Array<{ hole: number; par: number }>;
-};
-
 export async function GET(request: Request) {
   const query = new URL(request.url).searchParams.get("q")?.trim() ?? "";
   if (query.length < 2) {
@@ -25,7 +23,7 @@ export async function GET(request: Request) {
 
   try {
     const response = await fetch(
-      `${API_ROOT}/courses/search?q=${encodeURIComponent(query)}`,
+      `${OPENGOLF_API_ORIGIN}/v1/courses/search?q=${encodeURIComponent(query)}`,
       { headers: { Accept: "application/json" } },
     );
 
@@ -35,18 +33,20 @@ export async function GET(request: Request) {
 
     const courses = await Promise.all(
       baseCourses.map(async (course): Promise<CourseSearchResult> => {
-        let detail: DetailCourse | null = null;
+        let detail: RawOpenGolfCourse | null = null;
         try {
-          const detailResponse = await fetch(`${API_ROOT}/courses/${course.id}`, {
-            headers: { Accept: "application/json" },
-          });
-          if (detailResponse.ok) detail = (await detailResponse.json()) as DetailCourse;
+          const detailResponse = await fetch(
+            `${OPENGOLF_API_ORIGIN}/api/v1/courses/${course.id}`,
+            { headers: { Accept: "application/json" } },
+          );
+          if (detailResponse.ok) detail = (await detailResponse.json()) as RawOpenGolfCourse;
         } catch {
           // Search results remain useful even if a detail enrichment times out.
         }
 
         const name = course.name || course.course_name || "Unnamed course";
         const courseName = course.course_name || course.name || name;
+        const scorecard = detail ? normalizeOpenGolfHoles(detail) : [];
         return {
           id: course.id,
           name,
@@ -54,8 +54,8 @@ export async function GET(request: Request) {
           layoutName: name !== courseName ? name : null,
           city: course.city ?? detail?.city ?? null,
           state: course.state ?? detail?.state ?? null,
-          holes: detail?.scorecard?.length || detail?.holes || null,
-          par: detail?.scorecard?.reduce((sum, hole) => sum + hole.par, 0) || course.par || null,
+          holes: scorecard.length || null,
+          par: scorecard.reduce((sum, hole) => sum + hole.par, 0) || course.par || null,
         };
       }),
     );

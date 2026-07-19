@@ -1145,6 +1145,65 @@ input:focus-visible {
   text-align: center;
 }
 
+.course-par-check {
+  margin-top: 24px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #f7f4e9;
+}
+
+.course-par-check > div > span {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.course-par-check > div > div {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.course-par-check i {
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 1px;
+  background: #fff;
+  font-style: normal;
+}
+
+.course-par-check i small {
+  color: var(--muted);
+  font-size: 7px;
+}
+
+.course-par-check i strong {
+  font-size: 12px;
+}
+
+.course-par-check > button {
+  margin: 13px auto 0;
+  padding: 4px 0;
+  border: 0;
+  display: block;
+  color: var(--green-2);
+  background: transparent;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 750;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .score-entry-topline {
   display: flex;
   align-items: center;

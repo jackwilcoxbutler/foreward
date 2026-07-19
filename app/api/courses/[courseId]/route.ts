@@ -1,17 +1,10 @@
 import { NextResponse } from "next/server";
 import type { CourseDetail } from "@/lib/types";
-
-const API_ROOT = "https://api.opengolfapi.org/v1";
-
-type OpenGolfDetail = {
-  id: string;
-  name?: string;
-  course_name?: string;
-  city?: string | null;
-  state?: string | null;
-  scorecard?: Array<{ hole: number; par: number }>;
-  _license?: string;
-};
+import {
+  normalizeOpenGolfHoles,
+  OPENGOLF_API_ORIGIN,
+  type RawOpenGolfCourse,
+} from "@/lib/opengolf";
 
 export async function GET(
   _request: Request,
@@ -20,25 +13,24 @@ export async function GET(
   const { courseId } = await params;
 
   try {
-    const response = await fetch(
-      `${API_ROOT}/courses/${encodeURIComponent(courseId)}`,
+    let response = await fetch(
+      `${OPENGOLF_API_ORIGIN}/api/v1/courses/${encodeURIComponent(courseId)}`,
       { headers: { Accept: "application/json" } },
     );
+    // Keep the keyless basic endpoint as a resilience fallback.
+    if (!response.ok && response.status !== 404) {
+      response = await fetch(
+        `${OPENGOLF_API_ORIGIN}/v1/courses/${encodeURIComponent(courseId)}`,
+        { headers: { Accept: "application/json" } },
+      );
+    }
     if (response.status === 404) {
       return NextResponse.json({ error: "Course not found." }, { status: 404 });
     }
     if (!response.ok) throw new Error(`OpenGolfAPI returned ${response.status}`);
 
-    const course = (await response.json()) as OpenGolfDetail;
-    const scorecard = (course.scorecard ?? [])
-      .filter(
-        (hole) =>
-          Number.isInteger(hole.hole) &&
-          Number.isInteger(hole.par) &&
-          hole.par >= 2 &&
-          hole.par <= 7,
-      )
-      .sort((a, b) => a.hole - b.hole);
+    const course = (await response.json()) as RawOpenGolfCourse;
+    const scorecard = normalizeOpenGolfHoles(course);
 
     if (![9, 18].includes(scorecard.length)) {
       return NextResponse.json(
@@ -54,7 +46,9 @@ export async function GET(
       externalId: course.id,
       source: "opengolfapi",
       name,
-      layoutName: course.name && course.name !== name ? course.name : null,
+      layoutName:
+        (course.club_name && course.club_name !== name ? course.club_name : null) ||
+        (course.name && course.name !== name ? course.name : null),
       city: course.city ?? null,
       state: course.state ?? null,
       holes: scorecard,
