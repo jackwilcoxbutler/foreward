@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { AppHeader } from "@/components/AppHeader";
 import { RoundCreator } from "@/components/RoundCreator";
 
@@ -11,7 +12,7 @@ export default function CreateRoundPage() {
   return (
     <main className="creator-page">
       <AppHeader compact />
-      <RoundCreator />
+      <Suspense fallback={<div className="creator-shell"><section className="creator-panel empty-state">Loading your scorecard…</section></div>}><RoundCreator /></Suspense>
       <footer className="creator-footer">
         Course data from <a href="https://opengolfapi.org" target="_blank" rel="noreferrer">OpenGolfAPI</a>, ODbL.
       </footer>

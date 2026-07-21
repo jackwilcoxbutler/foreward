@@ -29,5 +29,6 @@ export const DEMO_ROUND: RoundRecord = {
   scoreToPar: totals.scoreToPar,
   createdAt: "2026-07-12T22:18:00.000Z",
   sourceLicense: "ODbL-1.0",
+  isPublic: true,
   holes: demoHoles,
 };

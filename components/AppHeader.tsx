@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BrandMark } from "./BrandMark";
+import { AuthNav } from "./AuthNav";
 
 export function AppHeader({ compact = false }: { compact?: boolean }) {
   return (
@@ -10,10 +11,7 @@ export function AppHeader({ compact = false }: { compact?: boolean }) {
         </Link>
         {!compact && (
           <nav className="site-nav" aria-label="Main navigation">
-            <a href="#how-it-works">How it works</a>
-            <Link className="button button-small button-dark" href="/create">
-              Create a round
-            </Link>
+            <AuthNav />
           </nav>
         )}
         {compact && (

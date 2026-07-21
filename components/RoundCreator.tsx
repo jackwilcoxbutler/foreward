@@ -1,7 +1,7 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertCircle,
   ArrowLeft,
@@ -10,6 +10,8 @@ import {
   Check,
   ChevronRight,
   Flag,
+  Eye,
+  EyeOff,
   LoaderCircle,
   MapPin,
   Minus,
@@ -17,8 +19,10 @@ import {
   Plus,
   Search,
   Sparkles,
+  Star,
 } from "lucide-react";
 import { BoxStrip } from "./BoxStrip";
+import { useAuth } from "./AuthProvider";
 import {
   buildRoundHoles,
   formatToPar,
@@ -27,15 +31,20 @@ import {
   RESULT_META,
   ROUND_TYPE_LABELS,
 } from "@/lib/golf";
+import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import type {
   CourseDetail,
   CourseSearchResult,
   HolePar,
   RoundRecord,
+  SavedCourseRecord,
   RoundType,
 } from "@/lib/types";
 
-type CreatorStep = "course" | "manual" | "format" | "scores" | "review";
+type CreatorStep = "course" | "manual" | "format" | "scores" | "review" | "account";
+type AccountMode = "signup" | "login";
+
+const DRAFT_KEY = "rounds:creator-draft:v1";
 
 function todayLocal() {
   const date = new Date();
@@ -82,6 +91,8 @@ function getRoundOptions(course: CourseDetail) {
 
 export function RoundCreator() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { session, configured: authConfigured } = useAuth();
   const [step, setStep] = useState<CreatorStep>("course");
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState<CourseSearchResult[]>([]);
@@ -96,6 +107,15 @@ export function RoundCreator() {
   const [playedAt, setPlayedAt] = useState(todayLocal());
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [isPublic, setIsPublic] = useState(true);
+  const [draftReady, setDraftReady] = useState(false);
+  const [savedCourses, setSavedCourses] = useState<SavedCourseRecord[]>([]);
+  const [savedCoursesLoading, setSavedCoursesLoading] = useState(false);
+  const [favoriteSaving, setFavoriteSaving] = useState(false);
+  const [accountMode, setAccountMode] = useState<AccountMode>("signup");
+  const [accountEmail, setAccountEmail] = useState("");
+  const [accountPassword, setAccountPassword] = useState("");
+  const [accountSubmitting, setAccountSubmitting] = useState(false);
 
   const [manualName, setManualName] = useState("");
   const [manualCity, setManualCity] = useState("");
@@ -105,6 +125,97 @@ export function RoundCreator() {
 
   const progressStep = step === "course" || step === "manual" ? 1 : step === "format" ? 2 : step === "scores" ? 3 : 4;
   const completedHoles = scores.filter((score) => Number.isInteger(score) && score >= 1 && score <= 20).length;
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        const raw = localStorage.getItem(DRAFT_KEY);
+        if (!raw) return;
+        const draft = JSON.parse(raw) as {
+        step?: CreatorStep;
+        query?: string;
+        course?: CourseDetail | null;
+        roundType?: RoundType | null;
+        roundHoles?: HolePar[];
+        scores?: number[];
+        activeHole?: number;
+        playedAt?: string;
+        isPublic?: boolean;
+        manualName?: string;
+        manualCity?: string;
+        manualState?: string;
+        manualHoleCount?: 9 | 18;
+        manualPars?: number[];
+        };
+        const validSteps: CreatorStep[] = ["course", "manual", "format", "scores", "review"];
+        if (draft.step && validSteps.includes(draft.step)) setStep(draft.step);
+        if (typeof draft.query === "string") setQuery(draft.query);
+        if (draft.course) setCourse(draft.course);
+        if (draft.roundType) setRoundType(draft.roundType);
+        if (Array.isArray(draft.roundHoles)) setRoundHoles(draft.roundHoles);
+        if (Array.isArray(draft.scores)) setScores(draft.scores);
+        if (Number.isInteger(draft.activeHole)) setActiveHole(draft.activeHole ?? 0);
+        if (typeof draft.playedAt === "string") setPlayedAt(draft.playedAt);
+        if (typeof draft.isPublic === "boolean") setIsPublic(draft.isPublic);
+        if (typeof draft.manualName === "string") setManualName(draft.manualName);
+        if (typeof draft.manualCity === "string") setManualCity(draft.manualCity);
+        if (typeof draft.manualState === "string") setManualState(draft.manualState);
+        if (draft.manualHoleCount === 9 || draft.manualHoleCount === 18) setManualHoleCount(draft.manualHoleCount);
+        if (Array.isArray(draft.manualPars)) setManualPars(draft.manualPars);
+      } catch {
+        localStorage.removeItem(DRAFT_KEY);
+      } finally {
+        setDraftReady(true);
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!draftReady) return;
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({
+      step: step === "account" ? "review" : step,
+      query,
+      course,
+      roundType,
+      roundHoles,
+      scores,
+      activeHole,
+      playedAt,
+      isPublic,
+      manualName,
+      manualCity,
+      manualState,
+      manualHoleCount,
+      manualPars,
+    }));
+  }, [activeHole, course, draftReady, isPublic, manualCity, manualHoleCount, manualName, manualPars, manualState, playedAt, query, roundHoles, roundType, scores, step]);
+
+  useEffect(() => {
+    if (!session) return;
+    const timer = window.setTimeout(() => {
+      setSavedCoursesLoading(true);
+      void fetch("/api/courses/saved", { headers: { Authorization: `Bearer ${session.access_token}` } })
+        .then(async (response) => {
+          const payload = (await response.json()) as { courses?: SavedCourseRecord[] };
+          if (response.ok) setSavedCourses(payload.courses ?? []);
+        })
+        .finally(() => setSavedCoursesLoading(false));
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [session]);
+
+  useEffect(() => {
+    const requestedCourse = searchParams.get("savedCourse");
+    if (!requestedCourse || step !== "course") return;
+    const match = savedCourses.find((savedCourse) => savedCourse.savedCourseId === requestedCourse);
+    if (!match) return;
+    const timer = window.setTimeout(() => {
+      setCourse(match);
+      setStep("format");
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [savedCourses, searchParams, step]);
 
   async function searchCourses(event: FormEvent) {
     event.preventDefault();
@@ -144,6 +255,35 @@ export function RoundCreator() {
     }
   }
 
+  function selectSavedCourse(savedCourse: SavedCourseRecord) {
+    setCourse(savedCourse);
+    setStep("format");
+  }
+
+  async function favoriteCurrentCourse() {
+    if (!course) return;
+    if (!session) {
+      router.push("/login?returnTo=/create");
+      return;
+    }
+    if (course.isFavorite) return;
+    setFavoriteSaving(true);
+    setSaveError(null);
+    const existing = course.savedCourseId;
+    const response = await fetch(existing ? `/api/courses/saved/${existing}` : "/api/courses/saved", {
+      method: existing ? "PATCH" : "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify(existing ? { isFavorite: true } : { course, isFavorite: true }),
+    });
+    const payload = (await response.json()) as { course?: SavedCourseRecord; error?: string };
+    if (!response.ok || !payload.course) setSaveError(payload.error || "Course favorite failed.");
+    else {
+      setCourse(payload.course);
+      setSavedCourses((current) => [payload.course!, ...current.filter((item) => item.savedCourseId !== payload.course!.savedCourseId)]);
+    }
+    setFavoriteSaving(false);
+  }
+
   function chooseFormat(type: RoundType, holes: HolePar[]) {
     setRoundType(type);
     setRoundHoles(holes);
@@ -172,7 +312,7 @@ export function RoundCreator() {
     if (pars.some((par) => !Number.isInteger(par) || par < 2 || par > 7)) return;
     const manualCourse: CourseDetail = {
       externalId: null,
-      source: "manual",
+      source: "custom",
       name: manualName.trim(),
       layoutName: null,
       city: manualCity.trim() || null,
@@ -202,6 +342,7 @@ export function RoundCreator() {
       return setStep("format");
     }
     if (step === "review") return setStep("scores");
+    if (step === "account") return setStep("review");
   }
 
   const previewRound = useMemo<RoundRecord | null>(() => {
@@ -230,22 +371,27 @@ export function RoundCreator() {
       scoreToPar: totals.scoreToPar,
       createdAt: new Date().toISOString(),
       sourceLicense: course.sourceLicense,
+      isPublic,
       holes,
     };
-  }, [course, playedAt, roundHoles, roundType, scores]);
+  }, [course, isPublic, playedAt, roundHoles, roundType, scores]);
 
-  async function saveRound() {
-    if (!course || !roundType || !previewRound) return;
+  async function saveRound(accessToken = session?.access_token) {
+    if (!course || !roundType || !previewRound || !accessToken) {
+      setStep("account");
+      return false;
+    }
     setSaving(true);
     setSaveError(null);
     try {
       const response = await fetch("/api/rounds", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
         body: JSON.stringify({
           course,
           roundType,
           playedAt,
+          isPublic,
           holes: previewRound.holes.map((hole) => ({
             courseHoleNumber: hole.courseHoleNumber,
             par: hole.par,
@@ -256,12 +402,39 @@ export function RoundCreator() {
       const payload = (await response.json()) as { shareId?: string; editToken?: string; error?: string };
       if (!response.ok || !payload.shareId) throw new Error(payload.error || "Round save failed.");
       if (payload.editToken) localStorage.setItem(`rounds:edit:${payload.shareId}`, payload.editToken);
-      router.push(`/r/${payload.shareId}`);
+      localStorage.removeItem(DRAFT_KEY);
+      router.push(isPublic ? `/r/${payload.shareId}` : "/my-rounds");
+      return true;
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "Round save failed.");
+      return false;
     } finally {
       setSaving(false);
     }
+  }
+
+  async function submitAccount(event: FormEvent) {
+    event.preventDefault();
+    if (!authConfigured) return setSaveError("Supabase Auth still needs to be connected.");
+    if (accountPassword.length < 8) return setSaveError("Use at least 8 characters for your password.");
+    setAccountSubmitting(true);
+    setSaveError(null);
+    const supabase = getSupabaseBrowserClient();
+    const result = accountMode === "signup"
+      ? await supabase.auth.signUp({ email: accountEmail, password: accountPassword })
+      : await supabase.auth.signInWithPassword({ email: accountEmail, password: accountPassword });
+    if (result.error) {
+      setSaveError(result.error.message);
+      setAccountSubmitting(false);
+      return;
+    }
+    if (!result.data.session) {
+      setSaveError("Automatic sign-in is unavailable. Disable Confirm email in Supabase Auth so golfers can share immediately.");
+      setAccountSubmitting(false);
+      return;
+    }
+    await saveRound(result.data.session.access_token);
+    setAccountSubmitting(false);
   }
 
   return (
@@ -281,6 +454,14 @@ export function RoundCreator() {
             <h1>Where did you play?</h1>
             <p>Search by course name, city, or state.</p>
           </div>
+          {session && (savedCoursesLoading || savedCourses.some((savedCourse) => savedCourse.isFavorite || savedCourse.lastPlayedAt)) && (
+            <div className="picker-saved-sections">
+              {savedCourses.some((savedCourse) => savedCourse.isFavorite) && <section><div className="picker-section-label"><Star size={14} /> Favorites</div><div className="picker-course-chips">{savedCourses.filter((savedCourse) => savedCourse.isFavorite).map((savedCourse) => <button type="button" key={savedCourse.savedCourseId} onClick={() => selectSavedCourse(savedCourse)}><strong>{savedCourse.name}</strong><small>{savedCourse.holes.length} holes · {locationLabel(savedCourse.city, savedCourse.state)}</small><ChevronRight size={17} /></button>)}</div></section>}
+              {savedCourses.some((savedCourse) => savedCourse.lastPlayedAt && !savedCourse.isFavorite) && <section><div className="picker-section-label"><CalendarDays size={14} /> Recent</div><div className="picker-course-chips">{savedCourses.filter((savedCourse) => savedCourse.lastPlayedAt && !savedCourse.isFavorite).slice(0, 4).map((savedCourse) => <button type="button" key={savedCourse.savedCourseId} onClick={() => selectSavedCourse(savedCourse)}><strong>{savedCourse.name}</strong><small>{savedCourse.holes.length} holes · {locationLabel(savedCourse.city, savedCourse.state)}</small><ChevronRight size={17} /></button>)}</div></section>}
+              {savedCoursesLoading && <span className="saved-courses-loading"><LoaderCircle className="spin" size={16} /> Loading saved courses…</span>}
+            </div>
+          )}
+          <div className="picker-section-label search-section-label"><Search size={14} /> Search</div>
           <form className="course-search-form" onSubmit={searchCourses}>
             <Search size={21} aria-hidden="true" />
             <input
@@ -328,7 +509,7 @@ export function RoundCreator() {
 
           <button className="manual-course-link" type="button" onClick={() => setStep("manual")}>
             <span className="manual-icon"><Pencil size={18} /></span>
-            <span><strong>Can’t find your course?</strong><small>Enter the course and hole pars manually</small></span>
+            <span><strong>Create Custom Course</strong><small>Enter a course name and par for every hole</small></span>
             <ChevronRight size={19} />
           </button>
         </section>
@@ -340,7 +521,7 @@ export function RoundCreator() {
           <div className="creator-heading">
             <p className="eyebrow">Manual scorecard</p>
             <h1>Add your course.</h1>
-            <p>This course stays with this round and won’t be added to public search.</p>
+            <p>It won’t be added to public search. After saving, it stays in your course library.</p>
           </div>
           <form onSubmit={continueManualCourse}>
             <div className="field-stack">
@@ -376,6 +557,7 @@ export function RoundCreator() {
             <div><span>Your course</span><strong>{course.name}</strong><small>{locationLabel(course.city, course.state)}</small></div>
             <span className="verified-pill"><Check size={13} /> Scorecard ready</span>
           </div>
+          <button className={`favorite-course-action${course.isFavorite ? " active" : ""}`} disabled={favoriteSaving || course.isFavorite} type="button" onClick={favoriteCurrentCourse}><Star size={17} />{course.isFavorite ? "Saved to Favorites" : session ? "Save to Favorites" : "Log in to favorite this course"}</button>
           <div className="creator-heading format-heading">
             <p className="eyebrow">Choose your loop</p>
             <h1>What did you play?</h1>
@@ -402,7 +584,7 @@ export function RoundCreator() {
             </div>
             <button type="button" onClick={reviewCoursePars}>Pars look wrong? Review &amp; edit</button>
           </div>
-          <p className="data-note">Course data from OpenGolfAPI, ODbL. You’ll be able to review every par before saving.</p>
+          <p className="data-note">{course.source === "opengolfapi" ? "Course data from OpenGolfAPI, ODbL." : "Custom course details entered by you."} You’ll be able to review every par before saving.</p>
         </section>
       )}
 
@@ -487,12 +669,29 @@ export function RoundCreator() {
             </table>
           </div>
 
-          <div className="share-preview-note"><Sparkles size={19} /><span><strong>Your share card is ready.</strong> Saving creates a permanent, view-only link.</span></div>
+          <div className="share-preview-note"><Sparkles size={19} /><span><strong>{isPublic ? "Your share card is ready." : "Your private round is ready."}</strong> {isPublic ? "Saving creates a permanent, view-only link." : "It will only appear in My Rounds."}</span></div>
+          <fieldset className="privacy-choice review-privacy"><legend>Who can view this round?</legend><button className={isPublic ? "selected" : ""} type="button" onClick={() => setIsPublic(true)}><Eye size={18} /><span><strong>Public</strong><small>Anyone with the link can view</small></span>{isPublic && <Check size={17} />}</button><button className={!isPublic ? "selected" : ""} type="button" onClick={() => setIsPublic(false)}><EyeOff size={18} /><span><strong>Private</strong><small>Only visible in My Rounds</small></span>{!isPublic && <Check size={17} />}</button></fieldset>
           {saveError && <div className="inline-alert save-alert" role="alert"><AlertCircle size={19} /><span>{saveError}</span></div>}
-          <button className="button button-primary button-large button-full" type="button" disabled={saving || completedHoles !== roundHoles.length} onClick={saveRound}>
-            {saving ? <><LoaderCircle className="spin" size={20} /> Saving your round…</> : <>Save &amp; see share card <ArrowRight size={19} /></>}
+          <button className="button button-primary button-large button-full" type="button" disabled={saving || completedHoles !== roundHoles.length} onClick={() => { if (session) void saveRound(); else setStep("account"); }}>
+            {saving ? <><LoaderCircle className="spin" size={20} /> Saving your round…</> : <>{isPublic ? "Save & Share" : "Save private round"} <ArrowRight size={19} /></>}
           </button>
-          <p className="privacy-note">No account needed. Your public page is view-only.</p>
+          <p className="privacy-note">Your scores are saved automatically after this final step.</p>
+        </section>
+      )}
+
+      {step === "account" && course && previewRound && (
+        <section className="creator-panel account-wall-panel">
+          <button className="back-link" type="button" onClick={goBack}><ArrowLeft size={17} /> Back to review</button>
+          <div className="account-wall-ready"><span aria-hidden="true">⛳</span><div><p className="eyebrow">Final step</p><h1>Your round is ready!</h1><p>{course.name} · {previewRound.totalScore} ({formatToPar(previewRound.scoreToPar)})</p></div></div>
+          <div className="account-wall-value"><p>Create your free account to:</p><ul><li><Check size={17} /> Save this round forever</li><li><Check size={17} /> Edit it later</li><li><Check size={17} /> Build your Golf Archive</li><li><Check size={17} /> Share with friends</li></ul></div>
+          <form className="account-wall-form" onSubmit={submitAccount}>
+            <label>Email<input type="email" autoComplete="email" required value={accountEmail} onChange={(event) => setAccountEmail(event.target.value)} /></label>
+            <label>Password<input type="password" autoComplete={accountMode === "signup" ? "new-password" : "current-password"} minLength={8} required value={accountPassword} onChange={(event) => setAccountPassword(event.target.value)} /><small>{accountMode === "signup" ? "At least 8 characters" : "Your existing password"}</small></label>
+            {saveError && <div className="inline-alert save-alert" role="alert"><AlertCircle size={19} /><span>{saveError}</span></div>}
+            <button className="button button-primary button-large button-full" disabled={accountSubmitting || saving} type="submit">{accountSubmitting || saving ? <><LoaderCircle className="spin" size={20} /> Saving your round…</> : <>{accountMode === "signup" ? "Create Free Account" : "Log In & Save Round"} <ArrowRight size={18} /></>}</button>
+          </form>
+          <button className="account-mode-toggle" type="button" onClick={() => { setAccountMode((mode) => mode === "signup" ? "login" : "signup"); setSaveError(null); }}>{accountMode === "signup" ? "Already have an account? Log in" : "New here? Create a free account"}</button>
+          <p className="privacy-note">No profile questions. Sharing stays free forever.</p>
         </section>
       )}
     </div>

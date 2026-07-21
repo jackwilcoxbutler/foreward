@@ -27,7 +27,7 @@ export default function Home() {
             </Link>
           </div>
           <div className="hero-notes" aria-label="Product highlights">
-            <span><Check size={15} /> No account</span>
+            <span><Check size={15} /> No account to start</span>
             <span><Check size={15} /> Free to use</span>
             <span><Check size={15} /> Takes two minutes</span>
           </div>
@@ -101,8 +101,8 @@ export default function Home() {
           <article className="step-card">
             <span className="step-number">03</span>
             <span className="step-icon"><Share2 size={23} /></span>
-            <h3>Share the round</h3>
-            <p>Get a public scorecard and a colorful message ready for the group chat.</p>
+            <h3>Save &amp; share</h3>
+            <p>Create your free archive, then send the colorful recap to the group chat.</p>
           </article>
         </div>
       </section>

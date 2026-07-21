@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { getFeatureEntitlements, isHistoryItemLocked } from "../lib/features.ts";
 import { normalizeOpenGolfHoles } from "../lib/opengolf.ts";
+import { validHolePars } from "../lib/saved-courses.ts";
 
 test("normalizes a malformed native nine-hole OpenGolf scorecard", () => {
   const actualPars = [4, 4, 4, 3, 4, 5, 4, 3, 4];
@@ -47,10 +49,58 @@ test("ships the complete round creation and public sharing surfaces", async () =
 
   assert.match(landing, /Share your round, hole by hole\./);
   assert.match(landing, /16,800\+ US courses/);
-  assert.match(creator, /Can’t find your course\?/);
-  assert.match(creator, /Save &amp; see share card/);
+  assert.match(creator, /Create Custom Course/);
+  assert.match(creator, /Save &amp; Share/);
   assert.match(publicRound, /The scorecard/);
   assert.match(publicRound, /Create your round/);
+});
+
+test("keeps account creation as the final step and persists anonymous drafts", async () => {
+  const creator = await readFile(new URL("../components/RoundCreator.tsx", import.meta.url), "utf8");
+  assert.match(creator, /Your round is ready!/);
+  assert.match(creator, /Save this round forever/);
+  assert.match(creator, /Build your Golf Archive/);
+  assert.match(creator, /rounds:creator-draft:v1/);
+  assert.match(creator, /localStorage\.setItem\(DRAFT_KEY/);
+  assert.match(creator, /localStorage\.removeItem\(DRAFT_KEY\)/);
+  assert.match(creator, /signUp/);
+});
+
+test("abstracts free archive gating from future premium access", () => {
+  const free = getFeatureEntitlements("free");
+  const premium = getFeatureEntitlements("premium");
+  assert.equal(isHistoryItemLocked(2, free), false);
+  assert.equal(isHistoryItemLocked(3, free), true);
+  assert.equal(isHistoryItemLocked(100, premium), false);
+});
+
+test("validates reusable custom course scorecards", () => {
+  const valid = Array.from({ length: 9 }, (_, index) => ({ hole: index + 1, par: index === 2 ? 3 : 4 }));
+  assert.deepEqual(validHolePars(valid), valid);
+  assert.equal(validHolePars(valid.map((hole, index) => index === 4 ? { ...hole, par: 9 } : hole)), null);
+});
+
+test("adds ownership, privacy, account lifecycle, and saved course surfaces", async () => {
+  const [migration, roundsRoute, roundRoute, history, savedCourses, account] = await Promise.all([
+    readFile(new URL("../supabase/migrations/20260719000000_v11_accounts_history_courses.sql", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/rounds/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/rounds/[shareId]/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../components/RoundsHistory.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/SavedCoursesWorkspace.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/AccountWorkspace.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(migration, /create table if not exists public\.profiles/);
+  assert.match(migration, /create table if not exists public\.saved_courses/);
+  assert.match(migration, /user_id uuid references auth\.users/);
+  assert.match(migration, /is_public boolean not null default true/);
+  assert.match(roundsRoute, /getAuthenticatedUser/);
+  assert.match(roundRoute, /export async function DELETE/);
+  assert.match(history, /Unlock your Golf Archive/);
+  assert.match(history, /\$19\.99/);
+  assert.match(savedCourses, /Create Custom Course/);
+  assert.match(savedCourses, /toggleFavorite/);
+  assert.match(account, /Delete account/);
+  assert.match(account, /window\.confirm/);
 });
 
 test("keeps server secrets out of client-facing code", async () => {

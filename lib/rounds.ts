@@ -4,7 +4,8 @@ import type { RoundHole, RoundRecord } from "./types";
 
 type RoundRow = {
   share_id: string;
-  course_source: "opengolfapi" | "manual";
+  user_id: string | null;
+  course_source: "opengolfapi" | "manual" | "custom";
   external_course_id: string | null;
   course_name: string;
   course_layout_name: string | null;
@@ -18,6 +19,7 @@ type RoundRow = {
   score_to_par: number;
   created_at: string;
   source_license: string;
+  is_public: boolean;
   round_holes: Array<{
     display_order: number;
     course_hole_number: number;
@@ -29,6 +31,7 @@ type RoundRow = {
 
 export async function getRoundByShareId(
   shareId: string,
+  options: { userId?: string | null } = {},
 ): Promise<RoundRecord | null> {
   if (shareId.toLowerCase() === "demo") return DEMO_ROUND;
   if (!isSupabaseConfigured()) return null;
@@ -36,7 +39,7 @@ export async function getRoundByShareId(
   const { data, error } = await getSupabaseServerClient()
     .from("rounds")
     .select(
-      "share_id,course_source,external_course_id,course_name,course_layout_name,city,state,tee_name,round_type,played_at,total_score,total_par,score_to_par,created_at,source_license,round_holes(display_order,course_hole_number,par,score,result_category)",
+      "share_id,user_id,course_source,external_course_id,course_name,course_layout_name,city,state,tee_name,round_type,played_at,total_score,total_par,score_to_par,created_at,source_license,is_public,round_holes(display_order,course_hole_number,par,score,result_category)",
     )
     .eq("share_id", shareId.toUpperCase())
     .maybeSingle();
@@ -45,6 +48,7 @@ export async function getRoundByShareId(
   if (!data) return null;
 
   const row = data as unknown as RoundRow;
+  if (!row.is_public && row.user_id !== options.userId) return null;
   return {
     shareId: row.share_id,
     courseSource: row.course_source,
@@ -61,6 +65,7 @@ export async function getRoundByShareId(
     scoreToPar: row.score_to_par,
     createdAt: row.created_at,
     sourceLicense: row.source_license,
+    isPublic: row.is_public,
     holes: row.round_holes
       .sort((a, b) => a.display_order - b.display_order)
       .map((hole) => ({

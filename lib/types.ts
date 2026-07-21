@@ -11,7 +11,7 @@ export type RoundType =
   | "nine_hole_course"
   | "full_18";
 
-export type CourseSource = "opengolfapi" | "manual";
+export type CourseSource = "opengolfapi" | "manual" | "custom";
 
 export interface HolePar {
   hole: number;
@@ -39,6 +39,8 @@ export interface CourseDetail {
   holes: HolePar[];
   teeName: string | null;
   sourceLicense: string;
+  savedCourseId?: string | null;
+  isFavorite?: boolean;
 }
 
 export interface RoundHole {
@@ -65,6 +67,7 @@ export interface RoundRecord {
   scoreToPar: number;
   createdAt: string;
   sourceLicense: string;
+  isPublic: boolean;
   holes: RoundHole[];
 }
 
@@ -72,9 +75,29 @@ export interface SaveRoundPayload {
   course: CourseDetail;
   roundType: RoundType;
   playedAt: string;
+  isPublic: boolean;
   holes: Array<{
     courseHoleNumber: number;
     par: number;
     score: number;
   }>;
+}
+
+export interface RoundHistoryItem {
+  shareId: string;
+  courseName: string;
+  playedAt: string;
+  totalScore: number;
+  totalPar: number;
+  scoreToPar: number;
+  isPublic: boolean;
+  locked: boolean;
+}
+
+export interface SavedCourseRecord extends CourseDetail {
+  savedCourseId: string;
+  isFavorite: boolean;
+  isCustom: boolean;
+  lastPlayedAt: string | null;
+  createdAt: string;
 }
