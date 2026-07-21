@@ -85,3 +85,4 @@ alter table public.saved_courses enable row level security;
 
 -- Application data continues through authenticated server routes using the
 -- service-role key. Supabase Auth itself uses the browser-safe anon key.
+--deploy

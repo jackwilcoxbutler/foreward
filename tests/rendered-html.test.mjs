@@ -50,7 +50,7 @@ test("ships the complete round creation and public sharing surfaces", async () =
   assert.match(landing, /Share your round, hole by hole\./);
   assert.match(landing, /16,800\+ US courses/);
   assert.match(creator, /Create Custom Course/);
-  assert.match(creator, /Save &amp; Share/);
+  assert.match(creator, /Save & Share/);
   assert.match(publicRound, /The scorecard/);
   assert.match(publicRound, /Create your round/);
 });
@@ -81,13 +81,15 @@ test("validates reusable custom course scorecards", () => {
 });
 
 test("adds ownership, privacy, account lifecycle, and saved course surfaces", async () => {
-  const [migration, roundsRoute, roundRoute, history, savedCourses, account] = await Promise.all([
+  const [migration, roundsRoute, roundRoute, history, savedCourses, account, authForm, editor] = await Promise.all([
     readFile(new URL("../supabase/migrations/20260719000000_v11_accounts_history_courses.sql", import.meta.url), "utf8"),
     readFile(new URL("../app/api/rounds/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/rounds/[shareId]/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../components/RoundsHistory.tsx", import.meta.url), "utf8"),
     readFile(new URL("../components/SavedCoursesWorkspace.tsx", import.meta.url), "utf8"),
     readFile(new URL("../components/AccountWorkspace.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/AuthForm.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/RoundEditor.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(migration, /create table if not exists public\.profiles/);
   assert.match(migration, /create table if not exists public\.saved_courses/);
@@ -101,6 +103,10 @@ test("adds ownership, privacy, account lifecycle, and saved course surfaces", as
   assert.match(savedCourses, /toggleFavorite/);
   assert.match(account, /Delete account/);
   assert.match(account, /window\.confirm/);
+  assert.match(authForm, /resetPasswordForEmail/);
+  assert.match(authForm, /updateUser\(\{ password \}\)/);
+  assert.match(editor, /isPublic/);
+  assert.match(editor, /method: "PATCH"/);
 });
 
 test("keeps server secrets out of client-facing code", async () => {
